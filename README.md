@@ -47,3 +47,21 @@ curl -X POST http://127.0.0.1:8000/api/integrations/salesforce/opportunity-submi
 ```
 
 When manager approves step 1, the integration event status is `Manager Approved`.
+
+## Automatic Salesforce Opportunity status update
+
+When approvals happen in this app, Salesforce-linked requests trigger automatic status push to Opportunity
+via Salesforce REST API (if credentials are configured):
+
+```bash
+export SF_INSTANCE_URL="https://your-org.my.salesforce.com"
+export SF_ACCESS_TOKEN="YOUR_OAUTH_ACCESS_TOKEN"
+export SF_OPPORTUNITY_STATUS_FIELD="Approval_Status__c"  # optional, default shown
+export SF_API_VERSION="v60.0"                            # optional
+```
+
+Status values pushed automatically include:
+- `Submitted`
+- `Manager Approved`
+- `Manager Rejected: <comment>`
+- `Approved`

@@ -27,18 +27,23 @@ def test_login_and_create_request(tmp_path: Path):
     assert my_requests[0]["title"] == "Vacation"
 
 
-def test_three_step_approval_salesforce_event(tmp_path: Path):
+def test_three_step_approval_salesforce_event(tmp_path: Path, monkeypatch):
     db_path = tmp_path / "test.db"
     service = ApprovalService(str(db_path))
+    pushed_updates = []
 
-    rid = service.create_request(
+    def fake_push(opportunity_id, status_payload):
+        pushed_updates.append((opportunity_id, status_payload))
+        return True
+
+    monkeypatch.setattr(service, "_update_salesforce_opportunity_status", fake_push)
+
+    rid = service.create_salesforce_request(
         requester="alice@company.com",
-        request_type="Discount Quote",
         title="Deal Discount",
         details="Need approval",
         first_approver="manager1@company.com",
-        external_system="salesforce",
-        external_reference="OPP-7788",
+        opportunity_id="OPP-7788",
     )
 
     assert service.decide(rid, "manager1@company.com", "approve", "director@company.com") == "Step 1 approved."
@@ -53,15 +58,23 @@ def test_three_step_approval_salesforce_event(tmp_path: Path):
             "SELECT system_name, external_id, status_payload FROM integration_events ORDER BY id"
         ).fetchall()
     assert rows == [
+        ("salesforce", "OPP-7788", "Submitted"),
         ("salesforce", "OPP-7788", "Manager Approved"),
         ("salesforce", "OPP-7788", "Step 3"),
         ("salesforce", "OPP-7788", "Approved"),
     ]
+    assert pushed_updates == [
+        ("OPP-7788", "Submitted"),
+        ("OPP-7788", "Manager Approved"),
+        ("OPP-7788", "Step 3"),
+        ("OPP-7788", "Approved"),
+    ]
 
 
-def test_reject_requires_comment_and_records_rejection(tmp_path: Path):
+def test_reject_requires_comment_and_records_rejection(tmp_path: Path, monkeypatch):
     db_path = tmp_path / "test.db"
     service = ApprovalService(str(db_path))
+    monkeypatch.setattr(service, "_update_salesforce_opportunity_status", lambda *_: True)
 
     rid = service.create_request(
         requester="alice@company.com",

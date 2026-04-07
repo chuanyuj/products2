@@ -7,6 +7,7 @@ import secrets
 import sqlite3
 from http import cookies
 from pathlib import Path
+from urllib import error, request as urlrequest
 from urllib.parse import parse_qs
 from wsgiref.simple_server import make_server
 
@@ -97,7 +98,7 @@ class ApprovalService:
             return rid
 
     def create_salesforce_request(self, requester, title, details, first_approver, opportunity_id):
-        return self.create_request(
+        rid = self.create_request(
             requester=requester,
             request_type="Discount Quote",
             title=title,
@@ -106,6 +107,9 @@ class ApprovalService:
             external_system="salesforce",
             external_reference=opportunity_id,
         )
+        with self._connect() as db:
+            self._record_salesforce_event(db, opportunity_id, "Submitted")
+        return rid
 
     def list_my_requests(self, user):
         with self._connect() as db:
@@ -144,20 +148,14 @@ class ApprovalService:
                 db.execute("UPDATE approval_steps SET status='rejected', comments=? WHERE id=?", (comments, step["id"]))
                 db.execute("UPDATE approval_requests SET status='rejected' WHERE id=?", (rid,))
                 if req["external_system"] == "salesforce" and req["external_reference"]:
-                    db.execute(
-                        "INSERT INTO integration_events (system_name,external_id,status_payload) VALUES ('salesforce',?, ?)",
-                        (req["external_reference"], f"Manager Rejected: {comments.strip()}"),
-                    )
+                    self._record_salesforce_event(db, req["external_reference"], f"Manager Rejected: {comments.strip()}")
                 return "Request rejected."
 
             db.execute("UPDATE approval_steps SET status='approved', comments=? WHERE id=?", (comments, step["id"]))
             if req["current_step"] == 3:
                 db.execute("UPDATE approval_requests SET status='approved' WHERE id=?", (rid,))
                 if req["external_system"] == "salesforce" and req["external_reference"]:
-                    db.execute(
-                        "INSERT INTO integration_events (system_name,external_id,status_payload) VALUES ('salesforce',?, 'Approved')",
-                        (req["external_reference"],),
-                    )
+                    self._record_salesforce_event(db, req["external_reference"], "Approved")
                 return "Final approval complete."
 
             if not next_approver:
@@ -172,11 +170,41 @@ class ApprovalService:
                 status_payload = f"Step {next_step}"
                 if req["current_step"] == 1:
                     status_payload = "Manager Approved"
-                db.execute(
-                    "INSERT INTO integration_events (system_name,external_id,status_payload) VALUES ('salesforce',?, ?)",
-                    (req["external_reference"], status_payload),
-                )
+                self._record_salesforce_event(db, req["external_reference"], status_payload)
             return f"Step {req['current_step']} approved."
+
+    def _record_salesforce_event(self, db: sqlite3.Connection, opportunity_id: str, status_payload: str) -> None:
+        db.execute(
+            "INSERT INTO integration_events (system_name,external_id,status_payload) VALUES ('salesforce',?, ?)",
+            (opportunity_id, status_payload),
+        )
+        self._update_salesforce_opportunity_status(opportunity_id, status_payload)
+
+    def _update_salesforce_opportunity_status(self, opportunity_id: str, status_payload: str) -> bool:
+        instance_url = os.getenv("SF_INSTANCE_URL", "").rstrip("/")
+        access_token = os.getenv("SF_ACCESS_TOKEN", "")
+        field_api_name = os.getenv("SF_OPPORTUNITY_STATUS_FIELD", "Approval_Status__c")
+        api_version = os.getenv("SF_API_VERSION", "v60.0")
+
+        if not instance_url or not access_token:
+            return False
+
+        endpoint = f"{instance_url}/services/data/{api_version}/sobjects/Opportunity/{opportunity_id}"
+        payload = json.dumps({field_api_name: status_payload}).encode()
+        req = urlrequest.Request(
+            endpoint,
+            data=payload,
+            method="PATCH",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            },
+        )
+        try:
+            with urlrequest.urlopen(req, timeout=8):
+                return True
+        except (error.URLError, error.HTTPError):
+            return False
 
 
 class ApprovalApp:
