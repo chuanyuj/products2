@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h1>Start 3-step approval</h1>
+  <form method="post" class="form-grid">
+    <label>Request type
+      <select name="request_type">
+        <option value="Day Off">Day Off</option>
+        <option value="Discount Quote">Discount Quote</option>
+        <option value="Purchase">Purchase</option>
+      </select>
+    </label>
+
+    <label>Title
+      <input type="text" name="title" required />
+    </label>
+
+    <label>Details
+      <textarea name="details" rows="4" required></textarea>
+    </label>
+
+    <label>First approver email
+      <input type="email" name="first_approver" required />
+    </label>
+
+    <h3>Optional integration</h3>
+    <label>External system
+      <select name="external_system">
+        <option value="">None</option>
+        <option value="salesforce">Salesforce</option>
+      </select>
+    </label>
+
+    <label>External reference (e.g., Opportunity ID)
+      <input type="text" name="external_reference" />
+    </label>
+
+    <button type="submit">Submit request</button>
+  </form>
+</section>
+{% endblock %}

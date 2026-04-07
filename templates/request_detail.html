@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h1>Request #{{ approval_request.id }}: {{ approval_request.title }}</h1>
+  <p><b>Type:</b> {{ approval_request.request_type }}</p>
+  <p><b>Requester:</b> {{ approval_request.requester_email }}</p>
+  <p><b>Status:</b> {{ approval_request.status }}</p>
+  <p><b>Current Step:</b> {{ approval_request.current_step }}</p>
+  <p><b>Details:</b> {{ approval_request.details }}</p>
+  {% if approval_request.external_system %}
+    <p><b>Integration:</b> {{ approval_request.external_system }} ({{ approval_request.external_reference }})</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>3-step chain</h2>
+  <ol>
+    {% for step in steps %}
+      <li>
+        <b>Step {{ step.step_number }}</b> - {{ step.status }}
+        {% if step.approver_email %}(approver: {{ step.approver_email }}){% endif %}
+        {% if step.comments %}<br/>Comment: {{ step.comments }}{% endif %}
+      </li>
+    {% endfor %}
+  </ol>
+</section>
+
+<section class="card">
+  <h2>Decision panel</h2>
+  <form method="post" action="{{ url_for('submit_decision', request_id=approval_request.id) }}" class="form-grid">
+    <label>Decision
+      <select name="decision">
+        <option value="approve">Approve</option>
+        <option value="reject">Reject</option>
+      </select>
+    </label>
+
+    <label>Assign next approver (required when approving step 1 and 2)
+      <input type="email" name="next_approver" />
+    </label>
+
+    <label>Comment
+      <textarea name="comments" rows="3"></textarea>
+    </label>
+
+    <button type="submit">Submit decision</button>
+  </form>
+  <small>Only the currently assigned approver can take action.</small>
+</section>
+{% endblock %}
