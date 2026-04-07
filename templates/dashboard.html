@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Approval Dashboard</h1>
+<div class="grid two-col">
+  <section class="card">
+    <h2>Pending my approvals</h2>
+    {% if pending_approvals %}
+      <ul>
+      {% for req in pending_approvals %}
+        <li><a href="{{ url_for('request_detail', request_id=req.id) }}">#{{ req.id }} - {{ req.title }}</a> (step {{ req.current_step }})</li>
+      {% endfor %}
+      </ul>
+    {% else %}
+      <p>No pending approvals.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>My submitted requests</h2>
+    {% if my_requests %}
+      <ul>
+      {% for req in my_requests %}
+        <li><a href="{{ url_for('request_detail', request_id=req.id) }}">#{{ req.id }} - {{ req.title }}</a> ({{ req.status }})</li>
+      {% endfor %}
+      </ul>
+    {% else %}
+      <p>You have not created requests yet.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
